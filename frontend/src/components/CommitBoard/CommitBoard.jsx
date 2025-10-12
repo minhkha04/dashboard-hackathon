@@ -1,240 +1,186 @@
-import React, { useMemo } from "react";
-import ReactECharts from "echarts-for-react";
+import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { convertCommitsToHeatmap, getTeamColor, getRepoShortName } from '../../utils/converCommitToHeapmap.js';
+
+const hours = [7, 8, 9, 10, 11, 12, 13, 14];
+
+// High contrast cyberpunk colors - easy to distinguish
+
+function calcGlobalMaxCommitSlot(repos) {
+    const allCounts = repos.flatMap(repo => Object.values(repo.heatmap).flat());
+    if (!allCounts.length) return 5;
+    const sorted = allCounts.sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    return Math.max(5, p95);
+}
 
 const CommitBoard = ({ data }) => {
-    console.log("Fetched commits in board:", data);
+    const convertData = convertCommitsToHeatmap(data);
+    console.log("Converted Data:", convertData);
 
-    // constants layout
-    const REPO_COL_WIDTH = 100;
-    const TOTAL_COL_WIDTH = 90;
-    const GAP_COL = 12;
-    const gridLeft = REPO_COL_WIDTH + TOTAL_COL_WIDTH + GAP_COL + 40;
-
-    // 2️⃣ Sắp xếp repo theo commit mới nhất
-    const sorted = useMemo(() => {
-        return [...data].sort((a, b) => {
-            const aTime = a.commits.length ? new Date(a.commits[0].created_at) : 0;
-            const bTime = b.commits.length ? new Date(b.commits[0].created_at) : 0;
-            return bTime - aTime;
-        });
-    }, [data]);
-
-    // 3️⃣ Map repo name → info nhanh
-    const byName = useMemo(() => {
-        const map = new Map();
-        sorted.forEach(r => map.set(r.repo_full_name, r));
-        return map;
-    }, [sorted]);
-
-    // 4️⃣ Flatten commits ra thành các điểm scatter
-    const points = useMemo(() => {
-        return sorted.flatMap(repo =>
-            repo.commits.map(c => ({
-                value: [c.created_at, repo.repo_full_name, c.commit_sha],
-                url: `https://github.com/${repo.repo_full_name}/commit/${c.commit_sha}`,
-                isNew: false, // Đặt tất cả commit về size bình thường
-            }))
-        );
-    }, [sorted]);
-
-    // 5️⃣ ECharts option
-    const option = useMemo(
-        () => ({
-            backgroundColor: "transparent", // Changed to transparent for futuristic background
-            grid: { left: gridLeft, right: 50, top: 120, bottom: 60 },
-
-            title: [
-                {
-                    text: "REALTIME COMMIT",
-                    left: "center",
-                    top: 25,
-                    textStyle: {
-                        color: "#00ffff",
-                        fontSize: 30,
-                        fontWeight: "bold",
-                        fontFamily: "monospace",
-                        textShadowColor: "#00ffff",
-                        textShadowBlur: 10,
-                        textShadowOffsetX: 0,
-                        textShadowOffsetY: 0
-                    },
-                },
-                {
-                    text: "TEAM",
-                    left: 20,
-                    top: 100,
-                    textStyle: {
-                        color: "#00eaff",
-                        fontSize: 30,
-                        fontWeight: "bold",
-                        fontFamily: "monospace"
-                    },
-                },
-                {
-                    text: "COMMIT",
-                    left: REPO_COL_WIDTH + 30,
-                    top: 100,
-                    textStyle: {
-                        color: "#ffd166",
-                        fontSize: 30,
-                        fontWeight: "bold",
-                        fontFamily: "monospace"
-                    },
-                },
-            ],
-            // table where hover
-            tooltip: {
-                trigger: "item",
-                backgroundColor: "rgba(15, 15, 15, 0.95)",
-                borderColor: "#00ffff",
-                borderWidth: 2,
-                textStyle: {
-                    color: "#00ffff",
-                    fontFamily: "monospace",
-                    fontSize: 12
-                },
-                formatter: p =>
-                    `<div style="border-left: 3px solid #00ffff; padding-left: 8px;">
-                        <b style="color: #00ffff;">[SQUAD]: ${p.value[1]}</b><br/>
-                        <span style="color: #ffd166;">[SHA]: ${p.value[2]}</span><br/>
-                        <span style="color: #8a2be2;">[TIMESTAMP]: ${new Date(p.value[0]).toLocaleString("vi-VN")}</span>
-                    </div>`,
-                extraCssText: `
-                    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-                    border-radius: 4px;
-                `
-            },
-
-            xAxis: {
-                type: "time",
-                name: "Time",
-                nameTextStyle: {
-                    color: "#00ffff",
-                    fontFamily: "monospace",
-                    fontSize: 12
-                },
-                nameLocation: "middle",
-                nameGap: 35,
-                axisLabel: {
-                    color: "#00eaff",
-                    fontFamily: "monospace",
-                    fontSize: 10,
-                    formatter: val =>
-                        new Date(val).toLocaleTimeString("vi-VN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        }),
-                },
-                axisLine: {
-                    show: true,
-                    lineStyle: {
-                        color: "#00ffff",
-                        width: 2,
-                        shadowColor: "#00ffff",
-                        shadowBlur: 5
-                    }
-                },
-                splitLine: {
-                    show: true,
-                    lineStyle: {
-                        color: "#001a33",
-                        type: "dashed",
-                        opacity: 0.5
-                    }
-                },
-            },
-
-            yAxis: {
-                type: "category",
-                inverse: true,
-                data: sorted.map(r => r.repo_full_name),
-                axisLine: {
-                    show: true,
-                    lineStyle: {
-                        color: "#00ffff",
-                        width: 2,
-                        shadowColor: "#00ffff",
-                        shadowBlur: 5
-                    }
-                },
-                axisTick: { show: false },
-                axisLabel: {
-                    margin: 12,
-                    formatter: value => {
-                        const repo = byName.get(value);
-                        return `{repo|${repo.repo_full_name}}{gap|}{total|${repo.total_commits}}`;
-                    },
-                    rich: {
-                        repo: {
-                            color: "#00eaff",
-                            fontWeight: "bold",
-                            fontSize: 20,
-                            width: REPO_COL_WIDTH,
-                            align: "left",
-                            fontFamily: "monospace",
-                            textShadowColor: "#00eaff",
-                            textShadowBlur: 3,
-                        },
-                        gap: { width: GAP_COL },
-                        total: {
-                            width: TOTAL_COL_WIDTH,
-                            align: "center",
-                            color: "#ffd166",
-                            fontSize: 20,
-                            fontFamily: "monospace",
-                            padding: [2, 4],
-                        },
-                    },
-                },
-            },
-
-            series: [
-                {
-                    type: "scatter",
-                    data: points.map(p => ({
-                        ...p,
-                        symbolSize: 24, // Size đồng nhất cho tất cả commits
-                        itemStyle: {
-                            color: "#00ff80", // Màu xanh neon đồng nhất
-                            opacity: 0.9,
-                            shadowColor: "#00ff80",
-                            borderColor: "#ffffff",
-                            borderWidth: 1,
-                            borderType: "solid"
-                        },
-                    })),
-                    emphasis: { itemStyle: { color: "#ff7777", borderColor: "#fff", borderWidth: 1 } },
-
-                    animationDuration: 800,
-                    animationEasing: "elasticOut",
-                    animationDurationUpdate: 1200,
-                    animationEasingUpdate: "bounceOut",
-                },
-            ],
-
-            animationDurationUpdate: 1200,
-            animationEasingUpdate: "bounceOut",
-        }),
-        [sorted, byName, points, gridLeft]
+    const maxCommitGlobal = useMemo(
+        () => calcGlobalMaxCommitSlot(convertData),
+        [convertData]
     );
 
-    const onEvents = {
-        click: params => {
-            const url = params.data?.url;
-            if (url) window.open(url, "_blank");
-        },
-    };
-
     return (
-        <div className="w-90vw h-[85vh] ">
-            {/* Chart container with futuristic border */}
-            <div className="h-full">
-                <ReactECharts
-                    option={option}
-                    onEvents={onEvents}
-                    style={{ width: "100%", height: "100%" }}
-                />
+        <div className="text-cyan-300 font-mono select-none bg-black rounded-lg border border-pink-500/30 shadow-2xl shadow-cyan-500/20">
+            {/* Header */}
+            <div className="grid grid-cols-9">
+                <div className="col-span-1 border border-pink-500 bg-gradient-to-r from-purple-900 to-pink-900 text-pink-400 font-bold text-center p-2 shadow-lg shadow-pink-500/50">
+                    REPO NAME
+                </div>
+                {hours.map((h) => (
+                    <div
+                        key={h}
+                        className={`col-span-1 border border-pink-500 bg-gradient-to-r from-purple-900 to-pink-900 text-pink-400 font-bold text-center p-2 cursor-pointer shadow-lg shadow-pink-500/50`}
+                    >
+                        {h}h
+                    </div>
+                ))}
             </div>
+
+            {/* Body */}
+            <AnimatePresence mode="sync" initial={false}>
+                {convertData.map((repo, repoIdx) => (
+                    <motion.div
+                        key={repo.repo_full_name}
+                        layout="position"
+                        initial={{
+                            opacity: 0,
+                            y: -60,  // Start higher for dramatic effect
+                            scale: 1.08,  // Larger initial scale
+                            zIndex: 100,
+                            rotateX: -15,  // 3D tilt effect
+                            backgroundColor: "rgba(34, 197, 94, 0.4)",
+                            boxShadow: "0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.4)"
+                        }}
+                        animate={{
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            zIndex: 1,
+                            rotateX: 0,
+                            backgroundColor: "rgba(0, 0, 0, 0)",
+                            boxShadow: "0 0 0px rgba(34, 197, 94, 0)"
+                        }}
+                        exit={{
+                            opacity: 0,
+                            scale: 0.8,
+                            y: -30,  // Exit upward 
+                            rotateX: -15,
+                            filter: "blur(4px)",
+                            position: "absolute",  // Remove from layout flow
+                            zIndex: -1,  // Behind everything
+                            transition: {
+                                duration: 0.5,
+                                ease: "easeInOut",
+                                position: { delay: 0 },  // Immediate position change
+                                zIndex: { delay: 0 }     // Immediate z-index change
+                            }
+                        }}
+                        transition={{
+                            y: {
+                                type: 'spring',
+                                stiffness: 150,
+                                damping: 18,
+                                mass: 1.2,
+                                duration: 1
+                            },
+                            scale: {
+                                duration: 0.8,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                            },
+                            rotateX: {
+                                duration: 0.8,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                            },
+                            backgroundColor: {
+                                duration: 2,
+                                ease: "easeOut",
+                                delay: 0.5
+                            },
+                            boxShadow: {
+                                duration: 2,
+                                ease: "easeOut",
+                                delay: 0.5
+                            },
+                            opacity: {
+                                duration: 0.4,
+                                ease: "easeOut"
+                            },
+                            layout: {
+                                type: 'spring',
+                                stiffness: 300,  // Faster layout changes
+                                damping: 30,
+                                mass: 0.8,
+                                velocity: 0
+                            }
+                        }}
+                        style={{
+                            position: 'relative',
+                            zIndex: repoIdx === 0 ? 50 : 1  // New items on top
+                        }}
+                        className={`grid grid-cols-9 transition-all duration-300
+                ${repoIdx === convertData.length - 1 ? 'border-b border-pink-500' : ''}
+                ${repo.highlight ? 'repo-highlight' : ''}  /* ✅ highlight cả hàng */
+            `}
+                    >
+                        {/* Repo name */}
+                        <div
+                            className="col-span-1 border-l border-pink-500 bg-gradient-to-r from-gray-900 to-purple-900 font-semibold text-xl pl-4 flex items-center"
+                            style={{ color: getTeamColor(getRepoShortName(repo.repo_full_name)) }}
+                        >
+                            <span
+                                className="truncate block max-w-[180px]"
+                                title={getRepoShortName(repo.repo_full_name)}
+                            >
+                                {getRepoShortName(repo.repo_full_name)}
+                            </span>
+                        </div>
+
+                        {/* Heatmap */}
+                        {hours.map((h) => (
+                            <div
+                                key={h}
+                                className={`col-span-1 text-center cursor-pointer bg-gradient-to-b from-gray-900 to-purple-900
+                    ${h === hours[hours.length - 1] ? 'border-r border-pink-500' : ''}
+                `}
+                            >
+                                <div className="grid grid-cols-4">
+                                    {repo.heatmap[h].map((count, idx) => {
+                                        const intensity = Math.min(count / maxCommitGlobal, 1);
+
+                                        // GitHub green color palette
+                                        const getGitHubColor = (intensity) => {
+                                            if (intensity === 0) return '#161b22'; // GitHub dark background
+                                            if (intensity <= 0.2) return '#0e4429'; // Dark green
+                                            if (intensity <= 0.4) return '#006d32'; // Medium dark green
+                                            if (intensity <= 0.6) return '#26a641'; // Medium green
+                                            if (intensity <= 0.8) return '#39d353'; // Bright green
+                                            return '#39d353'; // Max bright green
+                                        };
+
+                                        const bg = getGitHubColor(intensity);
+
+                                        return (
+                                            <div
+                                                key={idx}
+                                                className="col-span-1 text-center"
+                                                style={{
+                                                    backgroundColor: bg,
+                                                    height: '28px'
+                                                }}
+                                                title={`Commits: ${count}`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </motion.div>
+                ))}
+            </AnimatePresence>
         </div>
     );
 };

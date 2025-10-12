@@ -1,23 +1,22 @@
 import React from 'react'
-import logo from '../../assets/logo.png'
+import logo_hackathon from '../../assets/logo-hackathon.png'
+import logo_fpt from '../../assets/logo-fpt.png'
 
 const MainHeader = () => {
     return (
-        <header className="h-[15vh]">
-            <div className="flex flex-col items-center py-3">
+        <header className="">
+            <div className="flex flex-rol justify-center">
                 {/* Logo with futuristic glow */}
                 <img
-                    src={logo}
+                    src={logo_fpt}
                     alt="logo"
-                    className='h-16 w-16 drop-shadow-lg filter brightness-110'
+                    className='w-64 h-auto drop-shadow-lg filter brightness-110'
                 />
-
-                {/* Title with futuristic styling */}
-                <div className="mt-2 text-center">
-                    <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl tracking-wider font-mono">
-                        SEAL HACKATHON
-                    </h1>
-                </div>
+                <img
+                    src={logo_hackathon}
+                    alt="logo"
+                    className='w-64 h-auto drop-shadow-lg filter brightness-110'
+                />
             </div>
         </header>
     )

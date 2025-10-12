@@ -2,176 +2,217 @@ import { useCallback, useEffect, useState } from 'react'
 import CommitBoard from '../components/CommitBoard/CommitBoard'
 import MainHeader from '../components/MainHeader/MainHeader'
 import { commitService } from '../service/commit.service'
-import { io } from 'socket.io-client'
-import CommitBoardV2 from '../components/CommitBoard/CommitBoardV2'
-
-// 🧩 Hàm merge commit vào repo
-const mergeCommitToRepo = (currentList, newCommit) => {
-    const updated = [...currentList];
-    const repoIndex = updated.findIndex(
-        (r) => r.repo_full_name === newCommit.repo_full_name
-    );
-
-    if (repoIndex !== -1) {
-        // repo đã có sẵn → thêm commit mới
-        const repo = updated[repoIndex];
-        repo.commits.unshift({
-            commit_sha: newCommit.commit_sha,
-            created_at: newCommit.created_at,
-            isNew: true,
-        });
-        repo.total_commits += 1;
-    } else {
-        // repo mới hoàn toàn
-        updated.unshift({
-            repo_full_name: newCommit.repo_full_name,
-            total_commits: 1,
-            commits: [
-                {
-                    commit_sha: newCommit.commit_sha,
-                    created_at: newCommit.created_at,
-                    isNew: true,
-                },
-            ],
-        });
-    }
-
-    // sắp xếp repo theo commit mới nhất
-    updated.sort((a, b) => {
-        const aTime = new Date(a.commits[0]?.created_at || 0);
-        const bTime = new Date(b.commits[0]?.created_at || 0);
-        return bTime - aTime;
-    });
-
-    return updated;
-}
-
-// 🧩 Hàm nhận socket commit mới
-const useSocketCommits = (onNewCommit) => {
-    useEffect(() => {
-        // ⚙️ Dùng static reference để tránh tạo nhiều socket khi re-render
-        const socket = io("http://localhost:8080", {
-            transports: ["websocket"],
-            reconnection: true,
-            reconnectionAttempts: 5,
-        });
-
-        console.log("🔌 Socket connecting...");
-
-        socket.on("connect", () => {
-            console.log("✅ Socket connected:", socket.id);
-        });
-
-        socket.on("disconnect", (reason) => {
-            console.log("❌ Socket disconnected:", reason);
-        });
-
-        socket.on("connect_error", (err) => {
-            console.error("⚠️ Socket connection error:", err.message);
-        });
-
-        // 🔥 Lắng nghe commit mới
-        socket.on("new_commit", (data) => {
-            console.log("🟢 Commit mới từ socket:", data);
-            if (data && typeof onNewCommit === "function") {
-                onNewCommit(data);
-            }
-        });
-
-        // 🚪 Cleanup khi component unmount hoặc F5
-        return () => {
-            console.log("🧹 Cleaning up socket...");
-            socket.removeAllListeners(); // gỡ tất cả event listener
-            socket.disconnect(); // đóng kết nối
-        };
-    }, [onNewCommit]);
-};
+import Clock from '../components/CountdownClock.jsx'
+import { useRealtimeCommits } from '../hooks/useRealtimeCommits.js'
+import { fake_data, sortReposByLatestCommit } from '../utils/converCommitToHeapmap.js'
 
 const HomePage = () => {
 
-    const [commits, setCommits] = useState([]);
+  const [commits, setCommits] = useState([]);
 
-    // get initial commits
-    useEffect(() => {
-        commitService.getAll()
-            .then(res => {
-                const list = res.data?.data || [];
-                setCommits(list);
-                console.log("Fetched commits:", list);
-            })
-            .catch(console.error);
-    }, []);
+  // get initial commits
+  useEffect(() => {
+    commitService.getAll()
+      .then(res => {
+        const list = res.data?.data || [];
+        // const list = fake_data;
+        const sortedList = sortReposByLatestCommit(list);
+        setCommits(sortedList);
+        console.log("Fetched commits:", list);
+      })
+      .catch(console.error);
+  }, []);
 
-    // 2️⃣ Nhận commit mới từ socket
-    const handleSocketCommit = useCallback(
-        (newCommit) => {
-            setCommits((prev) => mergeCommitToRepo(prev, newCommit));
-        },
-        [setCommits]
-    );
+  // Khi có commit mới
+  const handleNewCommit = useCallback((newCommit) => {
+    setCommits((prev) => {
+      const foundRepoIndex = prev.findIndex(
+        (r) => r.repo_full_name === newCommit.repo_full_name
+      );
 
-    useSocketCommits(handleSocketCommit);
+      if (foundRepoIndex !== -1) {
+        // ✅ Repo đã tồn tại
+        const updatedRepo = {
+          ...prev[foundRepoIndex],
+          total_commits: prev[foundRepoIndex].total_commits + 1,
+          commits: [...prev[foundRepoIndex].commits, newCommit],
+          highlight: true, // thêm flag để highlight
+        };
 
+        // Đưa repo đó lên đầu danh sách
+        const newList = [
+          updatedRepo,
+          ...prev.filter((_, idx) => idx !== foundRepoIndex),
+        ];
 
-    return (
-        <div className='min-h-screen bg-gradient-to-br from-indigo-950 via-purple-900 to-cyan-900 relative overflow-hidden'>
-            {/* Futuristic background effects with brighter colors */}
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/15 via-blue-400/15 to-purple-400/15 animate-pulse"></div>
+        // Sau 3s bỏ highlight
+        setTimeout(() => {
+          setCommits((current) =>
+            current.map((repo) =>
+              repo.repo_full_name === updatedRepo.repo_full_name
+                ? { ...repo, highlight: false }
+                : repo
+            )
+          );
+        }, 3000);
 
-            {/* Tech grid pattern overlay with brighter cyan */}
-            <div className="absolute inset-0 opacity-20 pointer-events-none">
-                <div className="w-full h-full"
-                    style={{
-                        backgroundImage: `
-                             linear-gradient(rgba(0, 255, 255, 0.3) 1px, transparent 1px),
-                             linear-gradient(90deg, rgba(0, 255, 255, 0.3) 1px, transparent 1px)
-                         `,
-                        backgroundSize: '50px 50px'
-                    }}>
-                </div>
+        return newList;
+      } else {
+        // ✅ Repo mới hoàn toàn
+        const newRepo = {
+          repo_full_name: newCommit.repo_full_name,
+          total_commits: 1,
+          commits: [newCommit],
+          highlight: true,
+        };
+
+        // Sau 3s bỏ highlight
+        setTimeout(() => {
+          setCommits((current) =>
+            current.map((repo) =>
+              repo.repo_full_name === newRepo.repo_full_name
+                ? { ...repo, highlight: false }
+                : repo
+            )
+          );
+        }, 3000);
+
+        return [newRepo, ...prev];
+      }
+    });
+  }, []);
+
+  // Kích hoạt socket listener
+  useRealtimeCommits(handleNewCommit);
+  return (
+    <div className='min-h-screen relative p-5'>
+
+      {/* Enhanced Circuit Lines */}
+      <div className="circuit-lines">
+        <div className="circuit-line horizontal" style={{ top: '15%', animationDelay: '0s' }}></div>
+        <div className="circuit-line horizontal" style={{ top: '45%', animationDelay: '1.5s' }}></div>
+        <div className="circuit-line horizontal" style={{ top: '75%', animationDelay: '3s' }}></div>
+        <div className="circuit-line vertical" style={{ left: '20%', animationDelay: '2s' }}></div>
+        <div className="circuit-line vertical" style={{ left: '50%', animationDelay: '0.5s' }}></div>
+        <div className="circuit-line vertical" style={{ left: '80%', animationDelay: '2.5s' }}></div>
+      </div>
+
+      {/* Enhanced Binary Rain */}
+      <div className="binary-rain">
+        {Array.from({ length: 30 }, (_, i) => (
+          <div
+            key={i}
+            className="binary-char"
+            style={{
+              left: `${i * 3.3}%`,
+              animationDelay: `${Math.random() * 4}s`,
+              animationDuration: `${4 + Math.random() * 2}s`,
+              fontSize: `${12 + Math.random() * 6}px`,
+              color: i % 3 === 0 ? '#00ff88' : i % 3 === 1 ? '#00ffff' : '#ff00ff'
+            }}
+          >
+            {Math.random() > 0.5 ? '1' : '0'}
+          </div>
+        ))}
+      </div>
+
+      {/* Hexagon Particles */}
+      <div className="hackathon-particles">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div
+            key={`hex-${i}`}
+            className="hex-particle"
+            style={{
+              left: `${i * 12.5}%`,
+              animationDelay: `${Math.random() * 12}s`,
+              animationDuration: `${10 + Math.random() * 4}s`
+            }}
+          ></div>
+        ))}
+      </div>
+
+      {/* Data Stream Particles */}
+      <div className="hackathon-particles">
+        {Array.from({ length: 10 }, (_, i) => (
+          <div
+            key={`data-${i}`}
+            className="data-stream"
+            style={{
+              top: `${10 + i * 8}%`,
+              animationDelay: `${Math.random() * 6}s`,
+              animationDuration: `${5 + Math.random() * 3}s`
+            }}
+          >
+            {['</>', '{}', '[]', '()', '&lt;', '&gt;', '//'][Math.floor(Math.random() * 7)]}
+          </div>
+        ))}
+      </div>
+
+      {/* Pulse Rings */}
+      <div className="pulse-ring" style={{ top: '20%', left: '10%', width: '100px', height: '100px', animationDelay: '0s' }}></div>
+      <div className="pulse-ring" style={{ top: '60%', right: '15%', width: '150px', height: '150px', animationDelay: '1s' }}></div>
+      <div className="pulse-ring" style={{ bottom: '30%', left: '70%', width: '80px', height: '80px', animationDelay: '2s' }}></div>
+
+      {/* Energy Orbs */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <div
+          key={`orb-${i}`}
+          className="energy-orb"
+          style={{
+            top: `${20 + i * 10}%`,
+            left: `${10 + i * 15}%`,
+            animationDelay: `${i * 1.3}s`,
+            animationDuration: `${6 + Math.random() * 4}s`
+          }}
+        ></div>
+      ))}
+
+      {/* Scanning Line */}
+      <div className="scan-line"></div>
+
+      {/* Main content with enhanced glassmorphism */}
+      <div className="relative z-10 py-2 px-7">
+        <MainHeader />
+        <Clock />
+        {commits && commits.length > 0 ? (
+          <CommitBoard data={commits} />
+        ) : (
+          <div className="text-cyan-300 font-mono select-non p-8">
+            {/* Loading/Empty State */}
+            <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6">
+              {/* Animated loading spinner */}
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-pink-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+              </div>
+
+              {/* Loading text with typing effect */}
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold text-cyan-400 animate-pulse">
+                  INITIALIZING HACKATHON DASHBOARD...
+                </h3>
+                <p className="text-pink-300 text-sm">
+                  Connecting to repositories<span className="animate-pulse">...</span>
+                </p>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-cyan-500 to-pink-500 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+              </div>
+
+              {/* Decorative elements */}
+              <div className="flex space-x-4 text-xs text-cyan-500/50">
+                <span className="animate-pulse">LOADING...</span>
+                <span className="animate-pulse" style={{ animationDelay: '0.5s' }}>SCANNING...</span>
+                <span className="animate-pulse" style={{ animationDelay: '1s' }}>ANALYZING...</span>
+              </div>
             </div>
-
-
-            {/* Scanning lines with brighter neon colors */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent animate-pulse opacity-90 shadow-cyan-300 shadow-lg"></div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-300 to-transparent animate-pulse delay-1000 opacity-90 shadow-purple-300 shadow-lg"></div>
-
-            {/* Side glow effects with enhanced brightness */}
-            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-transparent via-blue-300 to-transparent animate-pulse delay-500 opacity-90 shadow-blue-300 shadow-lg"></div>
-            <div className="absolute top-0 right-0 w-1 h-full bg-gradient-to-b from-transparent via-cyan-300 to-transparent animate-pulse delay-1500 opacity-90 shadow-cyan-300 shadow-lg"></div>
-
-            {/* Main content with enhanced glassmorphism */}
-            <div className="relative z-10 ">
-                <MainHeader />
-
-                {commits && commits.length > 0 ? (
-                    <CommitBoard data={commits} />
-                ) : (
-                    <div className="flex items-center justify-center h-[85vh] text-center">
-                        <div className="space-y-4">
-                            <div className="text-6xl text-cyan-300/50 font-mono">
-                                [ NO DATA ]
-                            </div>
-                            <div className="text-cyan-200/70 text-lg font-mono tracking-wide">
-                                WAITING FOR COMMIT DATA...
-                            </div>
-                            <div className="flex justify-center space-x-2 mt-6">
-                                <div className="w-3 h-3 bg-cyan-400 rounded-full animate-bounce"></div>
-                                <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce delay-100"></div>
-                                <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce delay-200"></div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-
-            {/* Enhanced ambient lighting with brighter colors */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl opacity-60 animate-pulse"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl opacity-60 animate-pulse delay-1000"></div>
-            <div className="absolute top-1/2 right-1/3 w-72 h-72 bg-blue-400/15 rounded-full blur-2xl opacity-50 animate-pulse delay-500"></div>
-        </div>
-    )
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default HomePage
