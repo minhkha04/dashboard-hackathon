@@ -2,9 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import CommitBoard from '../components/CommitBoard/CommitBoard'
 import MainHeader from '../components/MainHeader/MainHeader'
 import { commitService } from '../service/commit.service'
-import Clock from '../components/CountdownClock.jsx'
 import { useRealtimeCommits } from '../hooks/useRealtimeCommits.js'
-import { fake_data, sortReposByLatestCommit } from '../utils/converCommitToHeapmap.js'
+import { sortReposByLatestCommit } from '../utils/converCommitToHeapmap.js'
 
 const HomePage = () => {
 
@@ -15,10 +14,9 @@ const HomePage = () => {
     commitService.getAll()
       .then(res => {
         const list = res.data?.data || [];
-        // const list = fake_data;
+        console.log("Fetched commits:", list);
         const sortedList = sortReposByLatestCommit(list);
         setCommits(sortedList);
-        console.log("Fetched commits:", list);
       })
       .catch(console.error);
   }, []);
@@ -82,7 +80,6 @@ const HomePage = () => {
     });
   }, []);
 
-  // Kích hoạt socket listener
   useRealtimeCommits(handleNewCommit);
   return (
     <div className='min-h-screen relative p-5'>
@@ -171,9 +168,8 @@ const HomePage = () => {
       <div className="scan-line"></div>
 
       {/* Main content with enhanced glassmorphism */}
-      <div className="relative z-10 py-2 px-7">
+      <div className="relative z-10 px-7">
         <MainHeader />
-        <Clock />
         {commits && commits.length > 0 ? (
           <CommitBoard data={commits} />
         ) : (

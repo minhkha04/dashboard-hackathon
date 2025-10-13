@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onChildAdded } from "firebase/database";
+import { getDatabase, ref, onChildAdded, onChildChanged } from "firebase/database";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,6 +24,15 @@ export const listenFirebaseCommits = (onNewCommit) => {
 
     // Lắng nghe khi có node con mới được thêm vào
     const unsubscribe = onChildAdded(commitsRef, (snapshot) => {
+        const commit = snapshot.val();
+        if (commit) {
+            console.log("✅ [Firebase] New commit:", commit);
+            onNewCommit(commit);
+        }
+    });
+
+    onChildChanged(commitsRef, (snapshot) => {
+        console.log("🟠 Commit bị cập nhật:", snapshot.val());
         const commit = snapshot.val();
         if (commit) {
             console.log("✅ [Firebase] New commit:", commit);

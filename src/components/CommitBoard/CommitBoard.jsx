@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { convertCommitsToHeatmap, getTeamColor, getRepoShortName } from '../../utils/converCommitToHeapmap.js';
-
+import { convertCommitsToHeatmap, getTeamColor, getRepoShortName, sortReposByLatestCommit } from '../../utils/converCommitToHeapmap.js';
 const hours = [7, 8, 9, 10, 11, 12, 13, 14];
 
 // High contrast cyberpunk colors - easy to distinguish
@@ -15,8 +14,7 @@ function calcGlobalMaxCommitSlot(repos) {
 }
 
 const CommitBoard = ({ data }) => {
-    const convertData = convertCommitsToHeatmap(data);
-    console.log("Converted Data:", convertData);
+    const convertData = convertCommitsToHeatmap(sortReposByLatestCommit(data));
 
     const maxCommitGlobal = useMemo(
         () => calcGlobalMaxCommitSlot(convertData),
@@ -24,7 +22,7 @@ const CommitBoard = ({ data }) => {
     );
 
     return (
-        <div className="text-cyan-300 font-mono select-none bg-black rounded-lg border border-pink-500/30 shadow-2xl shadow-cyan-500/20">
+        <div className=" font-mono select-none bg-black rounded-lg border border-pink-500/30 shadow-2xl shadow-cyan-500/20">
             {/* Header */}
             <div className="grid grid-cols-9">
                 <div className="col-span-1 border border-pink-500 bg-gradient-to-r from-purple-900 to-pink-900 text-pink-400 font-bold text-center p-2 shadow-lg shadow-pink-500/50">
@@ -35,7 +33,7 @@ const CommitBoard = ({ data }) => {
                         key={h}
                         className={`col-span-1 border border-pink-500 bg-gradient-to-r from-purple-900 to-pink-900 text-pink-400 font-bold text-center p-2 cursor-pointer shadow-lg shadow-pink-500/50`}
                     >
-                        {h}h
+                        {h}:00
                     </div>
                 ))}
             </div>
@@ -143,7 +141,7 @@ const CommitBoard = ({ data }) => {
                         {hours.map((h) => (
                             <div
                                 key={h}
-                                className={`col-span-1 text-center cursor-pointer bg-gradient-to-b from-gray-900 to-purple-900
+                                className={`col-span-1 text-center cursor-pointer bg-[#161b22]
                     ${h === hours[hours.length - 1] ? 'border-r border-pink-500' : ''}
                 `}
                             >
@@ -166,13 +164,14 @@ const CommitBoard = ({ data }) => {
                                         return (
                                             <div
                                                 key={idx}
-                                                className="col-span-1 text-center"
+                                                className="col-span-1 text-center font-bold text-xl text-white/50"
                                                 style={{
                                                     backgroundColor: bg,
-                                                    height: '28px'
                                                 }}
                                                 title={`Commits: ${count}`}
-                                            />
+                                            >
+                                                {count > 0 ? count : ' '}
+                                            </div>
                                         );
                                     })}
                                 </div>
