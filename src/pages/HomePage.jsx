@@ -82,7 +82,7 @@ const HomePage = () => {
 
   useRealtimeCommits(handleNewCommit);
   return (
-    <div className='min-h-screen relative p-5'>
+    <div className='h-full relative p-5'>
 
       {/* Enhanced Circuit Lines */}
       <div className="circuit-lines">

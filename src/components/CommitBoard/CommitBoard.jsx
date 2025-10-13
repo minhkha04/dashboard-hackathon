@@ -125,7 +125,7 @@ const CommitBoard = ({ data }) => {
             `}
                     >
                         {/* Repo name */}
-                        <div
+                        {/* <div
                             className="col-span-1 border-l border-pink-500 bg-gradient-to-r from-gray-900 to-purple-900 font-semibold text-xl pl-4 flex items-center"
                             style={{ color: getTeamColor(getRepoShortName(repo.repo_full_name)) }}
                         >
@@ -135,6 +135,21 @@ const CommitBoard = ({ data }) => {
                             >
                                 {getRepoShortName(repo.repo_full_name)}
                             </span>
+                            
+                        </div> */}
+                        <div
+                            className="col-span-1 border-l border-pink-500 bg-gradient-to-r from-gray-900 to-purple-900 font-semibold text-xl pl-4 flex items-center hover:bg-purple-800/40 transition-all duration-200"
+                        >
+                            <a
+                                href={`https://github.com/${repo.repo_full_name}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="truncate block max-w-[180px] text-pink-400 hover:text-cyan-300"
+                                style={{ color: getTeamColor(getRepoShortName(repo.repo_full_name)) }}
+                                title={`Open ${repo.repo_full_name} on GitHub`}
+                            >
+                                {getRepoShortName(repo.repo_full_name)}
+                            </a>
                         </div>
 
                         {/* Heatmap */}
