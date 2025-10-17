@@ -1,26 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import CommitBoard from '../components/CommitBoard/CommitBoard'
 import MainHeader from '../components/MainHeader/MainHeader'
-import { commitService } from '../service/commit.service'
 import { useRealtimeCommits } from '../hooks/useRealtimeCommits.js'
-import { sortReposByLatestCommit } from '../utils/converCommitToHeapmap.js'
 
 const HomePage = () => {
 
   const [commits, setCommits] = useState([]);
-
-  // get initial commits
-  useEffect(() => {
-    commitService.getAll()
-      .then(res => {
-        const list = res.data?.data || [];
-        console.log("Fetched commits:", list);
-        const sortedList = sortReposByLatestCommit(list);
-        setCommits(sortedList);
-      })
-      .catch(console.error);
-  }, []);
-
   // Khi có commit mới
   const handleNewCommit = useCallback((newCommit) => {
     setCommits((prev) => {
